@@ -10,18 +10,7 @@ WebRTCHttp is a lightweight JavaScript library that simplifies WebRTC peer-to-pe
 **Key features:** zero WebSocket dependency, simple callback-based API, automatic ICE candidate management, built-in pending candidate queue, and full ESM module support.
 
 # **Installation**
-## **Step 1 — Set up the library**
-Inside the webrtc-http library folder, initialise it and register it globally with npm link:
 
-cd webrtc-http
-
-npm init -y
-
-npm link
-
-This registers the package globally on your machine so any local project can consume it by name.
-
-## **Step 2 — Link it in your project**
 Import and use**
 Import using the package name :
 
