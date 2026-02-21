@@ -11,7 +11,7 @@ WebRTCHttp is a lightweight JavaScript library that simplifies WebRTC peer-to-pe
 
 # **Installation**
 
-Import and use**
+**Import and use**
 Import using the package name :
 
 import { WebRTCHttp } from "webrtc-http";
