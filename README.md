@@ -22,16 +22,8 @@ npm link
 This registers the package globally on your machine so any local project can consume it by name.
 
 ## **Step 2 — Link it in your project**
-Inside your project folder, initialise it and link the library by its package name:
-
-cd your-project
-
-npm init -y
-
-npm link webrtc-http
-
-## **Step 3 — Import and use**
-Import using the package name, not a file path:
+Import and use**
+Import using the package name :
 
 import { WebRTCHttp } from "webrtc-http";
 
