@@ -1,0 +1,22 @@
+{
+  "name": "webrtc-http",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "description": "Lightweight WebRTC HTTP signaling client",
+  "keywords": [
+    "webrtc",
+    "signaling",
+    "http",
+    "rtc",
+    "p2p"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
