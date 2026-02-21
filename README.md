@@ -2,7 +2,7 @@
 
 JavaScript Library Documentation
 
-v1.0.0  •  ESM Module  •  MIT License
+v1.0.0  •  ESM Module  
 
 # **Overview**
 WebRTCHttp is a lightweight JavaScript library that simplifies WebRTC peer-to-peer connections using HTTP-based signaling. Instead of requiring WebSockets, it uses standard HTTP polling to exchange WebRTC handshake data (offers, answers, and ICE candidates) through a REST backend, making it easy to integrate with any HTTP server.
