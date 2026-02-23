@@ -1,12 +1,8 @@
 export class WebRTCHttp {
 
-    constructor({ baseURL, roomid, username, rtcConfig = {}, pollInterval = 1000 }) {
+    constructor({ baseURL, rtcConfig = {}, pollInterval = 1000 }) {
 
         this.baseURL = baseURL;
-        this._roomid = roomid ?? Math.random().toString(36).substring(2, 8);
-
-        this._username = username ?? "Anonymous";
-        this._peername = "";
 
         this.pollInterval = pollInterval;
         this._pendingCandidates = [];
@@ -26,21 +22,9 @@ export class WebRTCHttp {
         this._setupPeerEvents();
     }
 
-    get username() {
-        return this._username;
-    }
-
-    get peername() {
-        return this._peername;
-    }
-
-    get roomid() {
-        return this._roomid;
-    }
-
     async connect() {
         try {
-            const offer = await this._get(`/signal/offer/${this._roomid}`);
+            const offer = await this._get(`/signal/offer`);
 
             if (offer) {
                 this.isCaller = false;
@@ -65,7 +49,7 @@ export class WebRTCHttp {
         const offer = await this.peer.createOffer();
         await this.peer.setLocalDescription(offer);
 
-        await this._post(`/signal/offer/${this._roomid}`, offer);
+        await this._post(`/signal/offer`, offer);
 
         this._startAnswerPolling();
     }
@@ -77,7 +61,7 @@ export class WebRTCHttp {
         const answer = await this.peer.createAnswer();
         await this.peer.setLocalDescription(answer);
         await this._flushPendingCandidates();
-        await this._post(`/signal/answer/${this._roomid}`, answer);
+        await this._post(`/signal/answer`, answer);
         console.log("Answer sent");
     }
 
@@ -98,8 +82,8 @@ export class WebRTCHttp {
         this.peer.onicecandidate = async (event) => {
             if (event.candidate) {
                 try {
-                    await this._post_candidate(
-                        `/signal/candidates/${this._roomid}/${this.isCaller}`,
+                    await this._post(
+                        `/signal/candidates/${this.isCaller}`,
                         event.candidate
                     );
                     console.log("New ICE candidate sent to server");
@@ -143,9 +127,8 @@ export class WebRTCHttp {
 
         this._candidateTimer = setInterval(async () => {
             try {
-                
                 const candidates = await this._get_candidates(
-                    `/signal/candidates/${this._roomid}/${this.isCaller}`
+                    `/signal/candidates/${this.isCaller}`
                 );
 
                 if (Array.isArray(candidates) && candidates.length > 0) {
@@ -170,7 +153,7 @@ export class WebRTCHttp {
 
         this._answerTimer = setInterval(async () => {
             try {
-                const answer = await this._get(`/signal/answer/${this._roomid}`);
+                const answer = await this._get(`/signal/answer`);
 
                 if (answer) {
                     if (this.peer.signalingState === "have-local-offer") {
@@ -188,23 +171,23 @@ export class WebRTCHttp {
         }, this.pollInterval);
     }
 
+    
     async _get(path) {
         try {
             const res = await fetch(this.baseURL + path);
             if (!res.ok) return null;
 
             const text = await res.text();
-            if (!text || text === "null") return null;
+            if (!text || text === "null" || text === "{}") return null;
 
-            const data = JSON.parse(text);
-            this._peername = data.username ?? this._peername;
-            return data?.sdp ?? null;
+            return JSON.parse(text);
         } catch (err) {
             console.error(`GET ${path} failed:`, err);
             return null;
         }
     }
 
+    
     async _get_candidates(path) {
         try {
             const res = await fetch(this.baseURL + path);
@@ -225,26 +208,10 @@ export class WebRTCHttp {
             await fetch(this.baseURL + path, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    sdp: body,
-                    username: this.username
-                })
-            });
-        } catch (err) {
-            console.error(`POST ${path} failed:`, err);
-            throw err;
-        }
-    }
-
-    async _post_candidate(path, body) {
-        try {
-            await fetch(this.baseURL + path, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body)
             });
         } catch (err) {
-            console.error(`POST candidate ${path} failed:`, err);
+            console.error(`POST ${path} failed:`, err);
             throw err;
         }
     }
