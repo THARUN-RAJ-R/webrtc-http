@@ -238,7 +238,6 @@ export class WebRTCHttp {
             if (contentType && contentType.includes("application/json")) {
                 return await res.json();
             }
-
             return null;
 
         } catch (err) {
