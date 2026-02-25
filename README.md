@@ -1,385 +1,344 @@
-**WebRTCHttp**
+# WebRTCHttp
 
-JavaScript Library Documentation
+## Overview
 
-v1.0.0 • ESM Module • MIT License
+#### WebRTCHttp is a lightweight JavaScript library that establishes peer-to-peer WebRTC
 
-# Overview
+#### connections using HTTP polling for signaling.
 
-WebRTCHttp is a lightweight JavaScript library that simplifies WebRTC peer-to-peer connections using HTTP-based signaling. It uses standard HTTP polling to exchange WebRTC handshake data — offers, answers, and ICE candidates — through a REST backend.
+## Installation
 
-**Key features:** Simple callback-based API, automatic ICE candidate management, built-in pending candidate queue, and full ESM module support.
+#### import { WebRTCHttp } from "webrtc-http";
 
-# Installation
+## Constructor
 
-## Import
+#### new WebRTCHttp({ baseURL, rtcConfig, pollInterval })
 
-**import { WebRTCHttp } from "webrtc-http";**
+### Parameters
 
-## package.json (library)
+#### Parameter Description
 
-**{**
+#### baseURL Base URL of your backend. e.g. https://myserver.com
 
-**"name": "webrtc-http",**
+#### rtcConfig RTCPeerConnection config object. Pass iceServers here.
 
-**"version": "1.0.0",**
+#### Default: {}
 
-**"type": "module",**
+#### pollInterval Polling interval in milliseconds for offer, answer, and
 
-**"main": "src/index.js",**
+#### ICE candidates. Default: 1000
 
-**"exports": { ".": "./src/index.js" }**
+### Example
 
-**}**
+#### const rtc = new WebRTCHttp({
 
-# Quick Start
+#### baseURL: "https://myserver.com",
 
-**import { WebRTCHttp } from "webrtc-http";**
+#### rtcConfig: {
 
-**const rtc = new WebRTCHttp({**
+#### iceServers: [
 
-**baseURL: "https://your-server.com",**
+#### { urls: "stun:stun.l.google.com:19302" },
 
-**rtcConfig: {**
 
-**iceServers: \[{ urls: "stun:stun.l.google.com:19302" }\]**
+#### {
 
-**}**
+#### urls: "turn:myturnserver.com:3478",
 
-**});**
+#### username: "user",
 
-**rtc.onopen = () => console.log("Connected!");**
+#### credential: "pass"
 
-**rtc.onmessage = (data) => console.log("Received:", data);**
+#### }
 
-**rtc.onclose = () => console.log("Disconnected");**
+#### ]
 
-**rtc.onerror = (err) => console.error("Error:", err);**
+#### },
 
-**await rtc.connect();**
+#### pollInterval: 1000
 
-**rtc.send("Hello, peer!");**
+#### });
 
-# Constructor
+##### The lib only needs a baseURL pointing to your backend. What that URL contains is entirely up to the
 
-**new WebRTCHttp({ baseURL, rtcConfig, pollInterval })**
+#### app.
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| baseURL | string | required | Base URL of your signaling server |
-| rtcConfig | object | {} | RTCPeerConnection config (STUN/TURN servers) |
-| pollInterval | number | 1000 | Polling interval in milliseconds |
+## Properties
 
-## rtcConfig Example
+#### Property Description
 
-**rtcConfig: {**
+#### rtc.peer The underlying RTCPeerConnection instance
 
-**iceServers: \[**
+#### rtc.dataChannel The RTCDataChannel instance (available after connect())
 
-**{ urls: "stun:stun.l.google.com:19302" },**
+#### rtc.isCaller Boolean — true if this peer sent the offer, false if it
 
-**{**
+#### received it
 
-**urls: "turn:your-turn-server.com:3478",**
+## Callbacks
 
-**username: "user",**
+#### Set these before calling connect():
 
-**credential: "password"**
+#### Callback Description
 
-**}**
+#### rtc.onopen = () => {} Fires when DataChannel is open and ready
 
-**\]**
+```
+rtc.onmessage = (data) =>
+```
+#### {}
 
-**}**
+```
+Fires when a message is received. data is string or
+```
+#### ArrayBuffer
 
-# Properties
+#### rtc.onclose = () => {} Fires when DataChannel closes
 
-## Public Properties
+#### rtc.onerror = (err) => {} Fires on DataChannel or ICE error
 
-| Property | Type | Description |
-| --- | --- | --- |
-| rtc.peer | RTCPeerConnection | The underlying RTCPeerConnection instance |
-| rtc.dataChannel | RTCDataChannel | The active data channel (null before connect) |
-| rtc.isCaller | boolean | True if this peer created the offer |
+### Example
 
-## Event Callbacks
+#### rtc.onopen = () => {
 
-Assign these before calling connect(). All are null by default.
 
-| Callback | Signature | Fired when |
-| --- | --- | --- |
-| rtc.onopen | () => void | DataChannel opens and is ready to send |
-| rtc.onmessage | (data) => void | A message or binary chunk is received from the peer |
-| rtc.onclose | () => void | DataChannel closes |
-| rtc.onerror | (err) => void | Any connection or channel error occurs |
+#### console.log("Connected!");
 
-**Important:** Set rtc.onopen before calling await rtc.connect() — the DataChannel may open during connect() and you would miss the event if set after.
+#### rtc.send("Hello!");
 
-# Methods
+#### };
 
-## connect()
+#### rtc.onmessage = (data) => {
 
-**await rtc.connect()**
+#### console.log("Received:", data);
 
-Initiates the WebRTC connection. Checks the signaling server for an existing offer:
+#### };
 
-*   No offer exists → **Caller**: creates DataChannel, generates offer, posts it, polls for answer
-*   Offer exists → **Receiver**: reads offer, creates answer, posts it back, DataChannel opens automatically
+#### rtc.onclose = () => {
 
-**Returns:** Promise<void>. Errors are caught and forwarded to rtc.onerror.
+#### console.log("Disconnected");
 
-## send(message)
+#### };
 
-**rtc.send(message)**
+#### rtc.onerror = (err) => {
 
-| Parameter | Type | Description |
-| --- | --- | --- |
-| message | string | ArrayBuffer | Uint8Array | Data to send to the peer |
+#### console.error("Error:", err);
 
-Logs a warning if the DataChannel is not open. Check rtc.dataChannel.readyState === 'open' beforehand if needed.
+#### };
 
-## close()
+## Methods
 
-**rtc.close()**
+### connect()
 
-Cleanly shuts down the connection:
+#### Starts the signaling process. POSTs to /signal/check to determine role, then either sends an
 
-*   Clears all polling timers (answer and candidate)
-*   Clears the pending candidate queue
-*   Closes the DataChannel
-*   Closes the RTCPeerConnection
+#### offer (Caller) or polls for one (Receiver). Also starts ICE candidate polling.
 
-# How It Works
+#### await rtc.connect();
+
+#### Always set callbacks (onopen, onmessage, etc.) BEFORE calling connect().
+
+### send(message)
+
+#### Sends a message over the DataChannel. Call only after onopen fires.
+
+#### rtc.send("Hello world"); // text
+
+#### rtc.send(new Uint8Array([1,2,3])); // binary
+
+### close()
+
+#### Closes the DataChannel, peer connection, and clears all polling timers.
+
+#### rtc.close();
+
 
 ## Connection Flow
 
-**Peer A (Caller) Server Peer B (Receiver)**
+#### Peer A (Caller) Server Peer B (Receiver)
 
-**──────────────────────────────────────────────────────────────────────────────**
+#### ─────────────────────────────────────────────────────────────────────────────
 
-**connect()**
+#### POST /signal/check ──► returns { caller: true }
 
-**GET /signal/offer ───► (empty)**
+#### POST /signal/check
 
-**◄── null**
+#### returns { caller: false } ◄──
 
-**POST /signal/offer ───► stores offer**
+#### createOffer()
 
-**poll /signal/answer**
+#### setLocalDescription(offer)
 
-**connect()**
+#### POST /signal/offer ──► store offer
 
-**GET /signal/offer**
+#### GET /signal/offer (poll)
 
-**returns offer ───►**
+#### return offer ◄──
 
-**POST /signal/answer**
+#### setRemoteDescription(offer)
 
-**◄─── stores answer**
+#### createAnswer()
 
-**◄── receives answer**
+#### setLocalDescription(answer)
 
-**setRemoteDescription()**
+#### POST /signal/answer ──►
 
-**\[ICE polling begins\]**
+#### GET /signal/answer (poll)
 
-**DataChannel opens ◄──────────────────────────────► DataChannel opens**
+#### ◄── return answer
 
-## ICE Candidate Exchange
+#### setRemoteDescription(answer)
 
-*   Caller posts candidates to /signal/candidates/true
-*   Receiver posts candidates to /signal/candidates/false
-*   Each peer polls /signal/candidates/{isCaller} — the server returns the opposite side's candidates
-*   Candidates arriving before remoteDescription is set are queued and flushed once ready
-*   Polling stops automatically when connection state reaches "connected"
+```
+POST /signal/candidates/true ──► store ICE POST
+```
+#### /signal/candidates/false
 
-## Pending Candidate Queue
+```
+GET /signal/candidates/true ◄── return ICE GET
+```
+#### /signal/candidates/false
 
-If ICE candidates arrive before setRemoteDescription() has been called, they are stored in \_pendingCandidates and flushed via \_flushPendingCandidates() once the remote description is ready.
+#### ◄═══════════════════ DataChannel OPEN ══════════════════►
 
-# Required Backend API
+## Required Backend API
 
-The lib expects these 6 REST endpoints. All request and response bodies are JSON.
+#### Your backend must implement these 6 endpoints. The lib calls them automatically.
 
-## POST /signal/offer
+#### Method + Path Request Body Response
 
-Store the caller's SDP offer.
+#### POST /signal/check none { "caller": true/false }
 
-**Request Body**
+#### POST /signal/offer SDP offer object 200 OK
 
-**{ "type": "offer", "sdp": "v=0\\r\\n..." }**
+#### GET /signal/offer none SDP object or 204
 
-## GET /signal/offer
+#### POST /signal/answer SDP answer object 200 OK
 
-Retrieve and consume the offer. Return empty object {} if none exists.
+#### GET /signal/answer none SDP object or 204
 
-**Response Body**
 
-**{ "type": "offer", "sdp": "v=0\\r\\n..." }**
+###### POST
 
-**// or {} if no offer exists**
+```
+/signal/candidates/{isC
+```
+#### aller}
 
-## POST /signal/answer
+#### ICE candidate obj 200 OK
 
-Store the receiver's SDP answer.
+###### GET
 
-**Request Body**
+```
+/signal/candidates/{isC
+```
+#### aller}
 
-**{ "type": "answer", "sdp": "v=0\\r\\n..." }**
+#### none Array or 204
 
-## GET /signal/answer
+##### {isCaller} is true for caller's candidates, false for receiver's. GET /signal/candidates returns the
 
-Retrieve and consume the answer. Return empty object {} if none exists.
+#### OPPOSITE side's candidates — caller polls for receiver's and vice versa.
 
-## POST /signal/candidates/{isCaller}
+### Important Notes
 
-Store an ICE candidate. isCaller is true or false.
+- GET /signal/offer and GET /signal/answer should return 204 (No Content) when empty
 
-**Request Body**
+#### — not null or {}
 
-**{ "candidate": "...", "sdpMid": "0", "sdpMLineIndex": 0 }**
+- GET /signal/candidates should return 204 when empty — not an empty array
+- The check endpoint must use atomic compare-and-swap to safely assign the caller role
+- Offer and answer should be consumed (removed) after GET to prevent stale data
 
-## GET /signal/candidates/{isCaller}
+## Full Usage Example
 
-Retrieve and consume the **opposite** side's candidates. If isCaller=true, return receiver's candidates and vice versa.
+#### import { WebRTCHttp } from "webrtc-http";
 
-**Response Body**
+#### const baseURL = `https://myserver.com/room/${roomid}`;
 
-**\[**
+#### const rtc = new WebRTCHttp({
 
-**{ "candidate": "...", "sdpMid": "0", "sdpMLineIndex": 0 },**
+#### baseURL,
 
-**{ "candidate": "...", "sdpMid": "0", "sdpMLineIndex": 1 }**
+#### rtcConfig: {
 
-**\]**
+#### iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 
-# Important Notes
+#### },
 
-## SDP Must Be Stored as Object, Not String
+#### pollInterval: 1000
 
-Store SDP as a plain object in your backend. Double-serializing (storing as a JSON string) causes TypeError: Failed to execute 'setRemoteDescription'.
+#### });
 
-**Java — correct**
+#### // Set callbacks before connect
 
-**private final Map<String, Object> offer = new ConcurrentHashMap<>();**
+#### rtc.onopen = () => {
 
-**offer.put(id, body); // ✓ store as Object**
+#### console.log("Connected! isCaller:", rtc.isCaller);
 
-**// NOT:**
+#### rtc.send("Hello from " + (rtc.isCaller? "Caller" : "Receiver"));
 
-**// offer.put(id, mapper.writeValueAsString(body.get("sdp"))); ✗**
+#### };
 
-## onopen Must Be Set Before connect()
+#### rtc.onmessage = (data) => {
 
-The DataChannel may open during connect() execution. Always set rtc.onopen before await rtc.connect().
+#### console.log("Message received:", data);
 
-**// ✓ Correct**
+#### };
 
-**rtc.onopen = () => { ... };**
+#### rtc.onclose = () => {
 
-**await rtc.connect();**
+#### console.log("Connection closed");
 
-**// ✗ Wrong — may miss the event**
+#### };
 
-**await rtc.connect();**
 
-**rtc.onopen = () => { ... };**
+#### rtc.onerror = (err) => {
 
-## Browser-Only
+#### console.error("Error:", err);
 
-Uses RTCPeerConnection and fetch — browser APIs only. Not compatible with Node.js without polyfills.
+#### };
 
-## One Room, Two Peers
+#### // Start connection
 
-Designed for exactly two peers per connection. The first peer becomes the Caller, the second the Receiver.
+#### await rtc.connect();
 
-# Error Handling
+#### // Later — close when done
 
-*   connect() errors are caught and forwarded to rtc.onerror
-*   Polling errors (answer, candidates) are console.error'd — the timer continues on the next interval
-*   ICE candidate send failures are forwarded to rtc.onerror
-*   All fetch calls return safe fallbacks (null or \[\]) on failure — they never throw unexpectedly
+#### // rtc.close();
 
-# Full Usage Example
+## Error Handling
 
-**import { WebRTCHttp } from "webrtc-http";**
+#### Scenario Behaviour
 
-**const rtc = new WebRTCHttp({**
+#### GET/POST to backend fails Logs error to console, returns null — polling continues
 
-**baseURL: "https://your-server.com",**
+```
+ICE candidate arrives
+```
+#### early
 
-**rtcConfig: {**
+```
+Queued in _pendingCandidates, flushed once
+```
+#### remoteDescription is set
 
-**iceServers: \[**
+#### DataChannel error onerror callback fires with the error event
 
-**{ urls: "stun:stun.l.google.com:19302" },**
+#### connect() throws onerror callback fires, no polling starts
 
-**{**
+## Important Notes
 
-**urls: "turn:your-turn.com:3478",**
+- Browser only — uses RTCPeerConnection and fetch, not available in Node.js
+- Only two peers can connect at a time — the check endpoint assigns one caller and one
 
-**username: "user",**
+#### receiver
 
-**credential: "pass"**
+- Set all callbacks before calling connect() to avoid missing early events
+- pollInterval defaults to 1000ms — lower values mean faster connection but more HTTP
 
-**}**
+#### requests
 
-**\]**
+- close() must be called to stop polling timers when the connection is no longer needed
 
-**},**
 
-**pollInterval: 1000**
-
-**});**
-
-**// Set ALL callbacks before connect()**
-
-**rtc.onopen = () => console.log("DataChannel open");**
-
-**rtc.onmessage = (data) => {**
-
-**if (typeof data === "string") {**
-
-**console.log("Text:", data);**
-
-**} else {**
-
-**console.log("Binary:", data.byteLength, "bytes");**
-
-**}**
-
-**};**
-
-**rtc.onclose = () => console.log("Peer disconnected");**
-
-**rtc.onerror = (err) => console.error("RTC Error:", err);**
-
-**await rtc.connect();**
-
-**console.log("isCaller:", rtc.isCaller);**
-
-**// Cleanup signaling after connection**
-
-**rtc.peer.onconnectionstatechange = () => {**
-
-**if (rtc.peer.connectionState === "connected") {**
-
-**fetch("/signal/cleanup", { method: "POST" });**
-
-**}**
-
-**};**
-
-**// Send a text message**
-
-**rtc.send("Hello!");**
-
-**// Send a binary chunk**
-
-**const buffer = await file.arrayBuffer();**
-
-**rtc.dataChannel.send(new Uint8Array(buffer));**
-
-**// Close when done**
-
-**rtc.close();**
