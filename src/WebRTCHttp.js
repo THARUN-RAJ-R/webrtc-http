@@ -12,6 +12,7 @@ export class WebRTCHttp {
 
         this._candidateTimer = null;
         this._answerTimer = null;
+        this._offerTimer = null;
         this.isCaller = false;
 
         this.onmessage = null;
@@ -24,17 +25,22 @@ export class WebRTCHttp {
 
     async connect() {
         try {
-            const offer = await this._get(`/signal/offer`);
+            const res = await fetch(this.baseURL + `/signal/check`, { method: "POST" });
+            const data = await res.json();
+            this.isCaller = data?.caller === true;
 
-            if (offer) {
-                this.isCaller = false;
-                await this._handleOffer(offer);
-            } else {
-                this.isCaller = true;
+            if (this.isCaller) {
+
+                console.log("Became caller");
                 await this._createAndSendOffer();
-            }
 
+            } else {
+
+                console.log("Became receiver");
+                this._startOfferPolling();
+            }
             this._startCandidatePolling();
+
         } catch (err) {
             console.error("Connection error:", err);
             if (this.onerror) this.onerror(err);
@@ -42,7 +48,6 @@ export class WebRTCHttp {
     }
 
     async _createAndSendOffer() {
-        console.log("Became caller");
         this.dataChannel = this.peer.createDataChannel("chat");
         this._setupDataChannel();
 
@@ -54,15 +59,84 @@ export class WebRTCHttp {
         this._startAnswerPolling();
     }
 
+    _startOfferPolling() {
+        if (this._offerTimer) return;
+
+        this._offerTimer = setInterval(async () => {
+            try {
+                const offer = await this._get(`/signal/offer`);
+
+                if (!offer) return;
+
+                console.log("Offer received, becoming receiver");
+
+                clearInterval(this._offerTimer);
+                this._offerTimer = null;
+
+                await this._handleOffer(offer);
+
+            } catch (err) {
+                console.error("Offer polling error:", err);
+            }
+        }, this.pollInterval);
+    }
+
     async _handleOffer(offer) {
-        console.log("Became receiver");
         await this.peer.setRemoteDescription(offer);
-        console.log("Received offer, sending answer...");
         const answer = await this.peer.createAnswer();
         await this.peer.setLocalDescription(answer);
         await this._flushPendingCandidates();
         await this._post(`/signal/answer`, answer);
         console.log("Answer sent");
+    }
+
+    _startAnswerPolling() {
+        if (!this.isCaller) return;
+        if (this._answerTimer) return;
+
+        this._answerTimer = setInterval(async () => {
+            try {
+                const answer = await this._get(`/signal/answer`);
+
+                if (answer) {
+                    if (this.peer.signalingState === "have-local-offer") {
+                        await this.peer.setRemoteDescription(answer);
+                        await this._flushPendingCandidates();
+                        console.log("Received answer, connection should establish soon...");
+
+                        clearInterval(this._answerTimer);
+                        this._answerTimer = null;
+                    }
+                }
+            } catch (err) {
+                console.error("Answer polling error:", err);
+            }
+        }, this.pollInterval);
+    }
+
+    _startCandidatePolling() {
+        if (this._candidateTimer) return;
+
+        this._candidateTimer = setInterval(async () => {
+            try {
+                const candidates = await this._get_candidates(
+                    `/signal/candidates/${this.isCaller}`
+                );
+
+                if (Array.isArray(candidates) && candidates.length > 0) {
+                    for (const c of candidates) {
+                        if (this.peer.remoteDescription) {
+                            await this.peer.addIceCandidate(c);
+                            console.log("Added remote candidate");
+                        } else {
+                            this._pendingCandidates.push(c);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Candidate polling error:", err);
+            }
+        }, this.pollInterval);
     }
 
     _setupPeerEvents() {
@@ -74,7 +148,6 @@ export class WebRTCHttp {
                     clearInterval(this._candidateTimer);
                     this._candidateTimer = null;
                 }
-
                 console.log("Peer fully connected");
             }
         };
@@ -121,82 +194,31 @@ export class WebRTCHttp {
             if (this.onerror) this.onerror(err);
         };
     }
-
-    _startCandidatePolling() {
-        if (this._candidateTimer) return;
-
-        this._candidateTimer = setInterval(async () => {
-            try {
-                const candidates = await this._get_candidates(
-                    `/signal/candidates/${this.isCaller}`
-                );
-
-                if (Array.isArray(candidates) && candidates.length > 0) {
-                    for (const c of candidates) {
-                        if (this.peer.remoteDescription) {
-                            await this.peer.addIceCandidate(c);
-                            console.log("Added remote candidate");
-                        } else {
-                            this._pendingCandidates.push(c);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error("Candidate polling error:", err);
-            }
-        }, this.pollInterval);
-    }
-
-    _startAnswerPolling() {
-        if (!this.isCaller) return;
-        if (this._answerTimer) return;
-
-        this._answerTimer = setInterval(async () => {
-            try {
-                const answer = await this._get(`/signal/answer`);
-
-                if (answer) {
-                    if (this.peer.signalingState === "have-local-offer") {
-                        await this.peer.setRemoteDescription(answer);
-                        await this._flushPendingCandidates();
-                        console.log("Received answer, connection should establish soon...");
-
-                        clearInterval(this._answerTimer);
-                        this._answerTimer = null;
-                    }
-                }
-            } catch (err) {
-                console.error("Answer polling error:", err);
-            }
-        }, this.pollInterval);
-    }
-
     
     async _get(path) {
         try {
             const res = await fetch(this.baseURL + path);
+
+            if (res.status === 204) return null;
             if (!res.ok) return null;
 
-            const text = await res.text();
-            if (!text || text === "null" || text === "{}") return null;
+            return await res.json();
 
-            return JSON.parse(text);
         } catch (err) {
             console.error(`GET ${path} failed:`, err);
             return null;
         }
     }
 
-    
     async _get_candidates(path) {
         try {
             const res = await fetch(this.baseURL + path);
+
+            if (res.status === 204) return [];
             if (!res.ok) return [];
 
-            const text = await res.text();
-            if (!text || text === "null") return [];
+            return await res.json();
 
-            return JSON.parse(text);
         } catch (err) {
             console.error(`GET candidates ${path} failed:`, err);
             return [];
@@ -205,11 +227,20 @@ export class WebRTCHttp {
 
     async _post(path, body) {
         try {
-            await fetch(this.baseURL + path, {
+            const res = await fetch(this.baseURL + path, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body)
             });
+            if (res.status === 204) return null;
+            if (!res.ok) return null;
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return await res.json();
+            }
+
+            return null;
+
         } catch (err) {
             console.error(`POST ${path} failed:`, err);
             throw err;
@@ -233,6 +264,11 @@ export class WebRTCHttp {
         if (this._candidateTimer) {
             clearInterval(this._candidateTimer);
             this._candidateTimer = null;
+        }
+
+        if (this._offerTimer) {
+            clearInterval(this._offerTimer);
+            this._offerTimer = null;
         }
 
         this._pendingCandidates = [];
