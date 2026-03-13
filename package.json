@@ -1,5 +1,5 @@
 {
-  "name": "webrtc-http",
+  "name": "webrtc-helper",
   "version": "1.0.0",
   "type": "module",
   "main": "src/index.js",
@@ -9,7 +9,7 @@
   "files": [
     "src"
   ],
-  "description": "Lightweight WebRTC HTTP signaling client",
+  "description": "Lightweight WebRTC HTTP & websocket signaling client",
   "keywords": [
     "webrtc",
     "signaling",
